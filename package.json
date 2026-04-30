@@ -10,6 +10,7 @@
     "dev:ui": "cross-env UI_MODE=true node --import tsx src/index.ts",
     "smoke:ui": "node scripts/ui-smoke.js",
     "smoke:hall": "node --import tsx scripts/hall-release-smoke.ts",
+    "smoke:hall-supervisor": "node --import tsx scripts/verify-hall-supervisor.ts",
     "command:backup-export": "cross-env APP_COMMAND=backup-export node --import tsx src/index.ts",
     "avatars:export": "node --import tsx scripts/export-staff-avatars.ts",
     "command:import-validate": "cross-env APP_COMMAND=import-validate node --import tsx src/index.ts",

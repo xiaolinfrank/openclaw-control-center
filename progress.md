@@ -784,3 +784,41 @@ P3-B-1/B-2 落地后，每次 dispatch 都会先写 enqueue 行到 `.hall/inbox/
 - 重点回归批 1（hall-loop-prevention + hall-mailbox + hall-scheduler + hall-policies + hall-human-review + collaboration-hall-store）：110/110 全过
 - 重点回归批 2（collaboration-hall-orchestrator + hall-runtime-dispatch + hall-prompt-context）：57 过 2 fail，2 fail 全是 P3-A 之前就有的基线（session-linkage / multi-mention routing），**零新回归**
 - `npm run smoke:ui` 通过
+
+## Session 2026-05-01 — P3-C-3b 真机端到端验证
+
+PR #22 合并后做端到端验证。生产 runtime 有 42 张活跃卡，直接起 dev server 让 supervisor 扫到孤儿后会真 dispatch 触发陈年对话——不安全。改成隔离 tmpdir e2e 脚本：`scripts/verify-hall-supervisor.ts`（npm run smoke:hall-supervisor）。
+
+### 脚本干什么
+
+1. mkdtemp 一个 tmpdir，设 `OPENCLAW_RUNTIME_DIR` + `HALL_RUNTIME_DISPATCH_ENABLED=false`
+2. process.chdir 到 tmpdir（hall-workspace.ts 在模块加载时锁 cwd）
+3. 直接写 3 个 store JSON：1 个 hall（operator + linus 两 participant）/ 1 张 in_progress 卡 / 1 条 message
+4. 手工写一条 `enqueue` 行进 `runtime/hall-workspaces/{cardId}/.hall/inbox/linus-dev.jsonl`——**不**配 consume，模拟崩溃留下的孤儿
+5. 调 `recoverPendingHallInboxes({ dispatcher: buildHallRecoveryDispatcher(client) })`（与 src/index.ts 启动用同一对函数）
+6. 断言：`scheduledCount === 1` / inbox 文件多一条 consume 行 / deliveries.jsonl 写了 1 条审计
+
+### 中途发现一个 CLI 坑
+
+scheduler 的 debounce timer `.unref()`——production 下 startUiServer 撑住 event loop 没问题；CLI 单跑时 `.unref` 后 worker 还没 drain 进程就退出了，await 的 Promise 永远不 resolve。脚本里加了一个 `setInterval(() => {}, 60_000)` 当 anchor，run() 完了 clear。已写到脚本注释里。下次写直接调 scheduler 的 CLI 工具要注意。
+
+### 验证结果
+
+```
+[verify] report: { scheduledCount: 1, canceledCount: 0, skippedCount: 0, perCard: [...] }
+[verify] elapsed: 58 ms
+[verify] inbox lines after recovery: 2
+  • enqueue 54aad9ec...
+  • consume 54aad9ec... (skipped: recovery: runtime cannot dispatch participant)
+[verify] deliveries.jsonl entries: 1
+  • 54aad9ec... → skipped (recovery: runtime cannot dispatch participant) (0ms)
+[verify] ✅ all assertions passed — supervisor recovered the orphan end-to-end
+```
+
+skipped 是预期的——`HALL_RUNTIME_DISPATCH_ENABLED=false` 让 `canDispatchHallToRuntime` 返 false，dispatcher 直接 return skipped，不真 dispatch（脚本目的是验证 wiring 不是真跑 OpenClaw）。consume + delivery 仍然落盘，证明 recovery 闭环走通：扫盘 → schedule → worker drain → consume + delivery。
+
+### 接下来
+
+- issue #13 三件套（Blackboard / Mailbox+Scheduler+Policy chain / Supervisor 双半）全部落地 + 验证
+- 设计 issue 可以关闭
+- 主 issue #9 第 1/2/3/4/6 项全部完成，可关闭
