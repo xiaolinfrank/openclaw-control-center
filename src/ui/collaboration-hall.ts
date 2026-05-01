@@ -2192,6 +2192,7 @@ export function renderCollaborationHallClientScript(language: UiLanguage): strin
 
   const loadHall = async (quiet = false) => {
     if (demoPlaybackRunning) return;
+    if (isDemoMode) return;
     if (hallReloadInFlight) return;
     hallReloadInFlight = true;
     try {
