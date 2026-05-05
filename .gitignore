@@ -40,3 +40,4 @@ i18n-missing-list.md
 .playwright-mcp/
 .playwright/
 .playwright-mcp/
+*.lock

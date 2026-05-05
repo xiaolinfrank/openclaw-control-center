@@ -39,10 +39,12 @@ export function resolveHallMentionTargets(
 
 function containsExplicitMention(content: string, alias: string): boolean {
   const escaped = escapeRegex(alias);
-  // Exact alias match: @alias followed by boundary
-  // Pre-boundary includes `|` so mentions inside tool markers like
+  // Exact alias match: @alias followed by boundary.
+  // Boundary char classes include markdown emphasis (`*` `_` `~`) so mentions
+  // wrapped in bold/italic/strike — e.g. `**@阿达 Ada**` — are still routed.
+  // `|` is included so mentions inside tool markers like
   // `[[tool:sessions_yield|@图灵 Turing ...]]` are detected.
-  const exactPattern = new RegExp(`(^|[\\s(|])@${escaped}(?=$|[\\s),.!?;:|\\]])`, "i");
+  const exactPattern = new RegExp(`(^|[\\s(|*_~])@${escaped}(?=$|[\\s),.!?;:|*_~\\]])`, "i");
   if (exactPattern.test(content)) return true;
   // Prefix match: check if @<alias_prefix> appears in content
   // e.g. "@罗莎琳德 Rosalind" matches alias "罗莎琳德 Rosalind (生信工程)"
@@ -53,7 +55,7 @@ function containsExplicitMention(content: string, alias: string): boolean {
     const prefix = words.slice(0, len).join(" ");
     if (prefix.length < 2) continue;
     const prefixEscaped = escapeRegex(prefix);
-    const prefixPattern = new RegExp(`(^|[\\s(|])@${prefixEscaped}(?=$|[\\s),.!?;:|\\n<\\]])`, "i");
+    const prefixPattern = new RegExp(`(^|[\\s(|*_~])@${prefixEscaped}(?=$|[\\s),.!?;:|*_~\\n<\\]])`, "i");
     if (prefixPattern.test(content)) return true;
   }
   return false;
